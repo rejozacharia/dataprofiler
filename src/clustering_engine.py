@@ -86,9 +86,13 @@ class ClusteringEngine:
 
         # Separate attribute names and feature matrix
         attribute_names = data_to_cluster['attribute_name'].tolist()
-        feature_matrix = data_to_cluster[features_present]
+        feature_matrix = data_to_cluster[features_present].copy() # Use .copy() to avoid SettingWithCopyWarning
 
-        # Handle missing values (imputation)
+        # --- Ensure all feature columns are numeric before imputation ---
+        for col in features_present:
+            feature_matrix[col] = pd.to_numeric(feature_matrix[col], errors='coerce')
+
+        # Handle missing values (imputation) - Now operating on a purely numeric (or NaN) matrix
         # Using median imputation as a robust strategy for skewed distributions
         try:
             imputer = SimpleImputer(strategy='median')
@@ -153,8 +157,7 @@ class ClusteringEngine:
             model = AgglomerativeClustering(
                 n_clusters=None,
                 distance_threshold=distance_threshold,
-                linkage='ward', # Minimizes variance within clusters
-                affinity='euclidean' # Standard distance metric
+                linkage='ward' # Minimizes variance within clusters; implicitly uses Euclidean distance
             )
             cluster_labels = model.fit_predict(scaled_data)
             n_clusters_found = len(set(cluster_labels))

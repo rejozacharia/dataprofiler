@@ -1,0 +1,8 @@
+streamlit
+sqlalchemy
+snowflake-sqlalchemy
+psycopg2-binary
+pandas
+numpy
+python-dateutil
+scikit-learn

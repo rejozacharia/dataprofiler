@@ -152,18 +152,18 @@ def display_attribute_selection():
                              selected_columns_in_table = st.multiselect("Select Columns", all_columns, key=f"col_select_{selected_schema}_{selected_table}")
 
                              if st.button("Add Columns to List", key=f"add_cols_{selected_schema}_{selected_table}"):
-                                 added_count = 0 # Initialize count for DB button click
-                                 columns_to_add = all_columns if not selected_columns_in_table else selected_columns_in_table
-                                 for col in columns_to_add:
-                                     identifier = format_attribute_identifier(selected_schema, selected_table, col)
-                                     if identifier not in st.session_state.attributes_to_profile:
-                                         st.session_state.attributes_to_profile.append(identifier)
-                                         added_count += 1
-                                 if added_count > 0:
-                                     st.success(f"Added {added_count} attribute(s) from '{selected_table}' to the profiling list.")
-                                     st.rerun()
-                                 elif columns_to_add:
-                                     st.info("Selected attribute(s) already in the list.")
+                                added_count = 0 # Initialize count for DB button click
+                                columns_to_add = all_columns if not selected_columns_in_table else selected_columns_in_table
+                                for col in columns_to_add:
+                                    identifier = format_attribute_identifier(selected_schema, selected_table, col)
+                                    if identifier not in st.session_state.attributes_to_profile:
+                                        st.session_state.attributes_to_profile.append(identifier)
+                                        added_count += 1
+                                if added_count > 0:
+                                    st.success(f"Added {added_count} attribute(s) from '{selected_table}' to the profiling list.")
+                                    # st.rerun() # REMOVED - Let Streamlit handle update on next interaction
+                                elif columns_to_add:
+                                    st.info("Selected attribute(s) already in the list.")
                     else:
                         st.info(f"No tables found in schema '{selected_schema}'.")
             else:
@@ -186,11 +186,14 @@ def display_attribute_selection():
                 if identifier not in st.session_state.attributes_to_profile:
                     st.session_state.attributes_to_profile.append(identifier)
                     added_count += 1
+            # Remove debug statements and uncomment rerun
             if added_count > 0:
                 st.success(f"Added {added_count} attribute(s) from '{filename}' to the profiling list.")
-                st.rerun()
+                #st.rerun() # Re-enable rerun
             elif columns_to_add:
                 st.info("Selected attribute(s) already in the list.")
+            else: # Handle case where columns_to_add might be empty
+                 st.info("No columns selected or available to add.")
     else:
         st.info("Connect to a database or upload a CSV file to select attributes.")
 

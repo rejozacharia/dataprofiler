@@ -15,8 +15,7 @@ st.set_page_config(layout="wide", page_title="Data Profiler")
 st.title("📊 Data Profiler Tool")
 
 # --- Config and State Management ---
-config_manager = ConfigManager()
-config_manager = ConfigManager()
+config_manager = ConfigManager() # Initialize once
 # Initialize session state variables if they don't exist
 if 'db_engine' not in st.session_state:
     st.session_state.db_engine = None # For source database connection
@@ -213,11 +212,15 @@ with st.sidebar:
         required_keys_results = set(conn_details_to_use.keys()) - {'db_type', 'role'} if conn_details_to_use else set()
         if conn_details_to_use and all(conn_details_to_use.get(k) for k in required_keys_results):
             with st.spinner("Connecting to results database..."):
+                # Save attempted details before connecting
+                config_manager.save_connection_details("results", conn_details_to_use)
+                config_manager.save_results_table_name(results_table_name) # Use correct variable name
                 engine = DatabaseConnector.create_db_engine(conn_details_to_use) # Use the determined details
                 if engine:
                     try:
-                        # Pass the specified table name
-                        st.session_state.results_manager = ResultsManager(engine, table_name=results_table_name)
+                        # Use the saved table name when initializing
+                        current_results_table_name = config_manager.load_results_table_name()
+                        st.session_state.results_manager = ResultsManager(engine, table_name=current_results_table_name)
                         st.success("Connected to Results DB & Manager initialized!")
                     except Exception as e:
                          st.error(f"Failed to initialize Results Manager: {e}")

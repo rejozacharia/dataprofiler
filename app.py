@@ -34,7 +34,7 @@ if 'source_type' not in st.session_state:
 if 'csv_df' not in st.session_state:
     st.session_state.csv_df = None # DataFrame from uploaded CSV
 if 'csv_filename' not in st.session_state:
-    st.session_state.csv_filename = "uploaded_csv" # Default name if not available
+    st.session_state.csv_filename = None # Store original filename
 if 'profiled_data' not in st.session_state:
     st.session_state.profiled_data = None # List of profile dicts from last run
 if 'cluster_results' not in st.session_state:
@@ -42,6 +42,7 @@ if 'cluster_results' not in st.session_state:
 # NEW: List to hold attributes selected for profiling
 if 'attributes_to_profile' not in st.session_state:
     st.session_state.attributes_to_profile = [] # List of strings: "schema.table.column" or "csv:filename.column"
+# Removed file ID tracker as it might be unreliable
 
 # --- Helper Functions ---
 def reset_state():
@@ -50,7 +51,7 @@ def reset_state():
     st.session_state.results_manager = None
     st.session_state.source_type = None
     st.session_state.csv_df = None
-    st.session_state.csv_filename = "uploaded_csv"
+    st.session_state.csv_filename = None # Reset filename
     st.session_state.profiled_data = None
     st.session_state.cluster_results = None
     st.session_state.attributes_to_profile = []
@@ -103,23 +104,36 @@ with st.sidebar:
 
     elif source_type == "CSV":
         st.session_state.source_type = "csv"
-        uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
+        uploaded_file = st.file_uploader("Upload CSV File", type=["csv"], key="csv_uploader")
+
+        # Check if a file is uploaded AND if it's different from the one currently loaded in state
         if uploaded_file is not None:
-             # Store filename, reset attribute list
-             st.session_state.csv_filename = uploaded_file.name
-             st.session_state.attributes_to_profile = []
-             with st.spinner("Loading CSV..."):
-                 try:
-                     df = DatabaseConnector.read_csv(uploaded_file)
-                     if df is not None:
-                         st.session_state.csv_df = df
-                         st.success(f"Loaded {uploaded_file.name} ({len(df)} rows)")
-                     else:
-                         st.error("Failed to read CSV file.")
-                         st.session_state.csv_df = None
-                 except Exception as e:
-                     st.error(f"Error loading CSV: {e}")
-                     st.session_state.csv_df = None
+            # Only reload and clear list if df is None OR filename changed
+            if st.session_state.csv_df is None or uploaded_file.name != st.session_state.csv_filename:
+                st.session_state.csv_filename = uploaded_file.name
+                st.session_state.attributes_to_profile = [] # Clear list ONLY on NEW/CHANGED upload
+                with st.spinner("Loading CSV..."):
+                    try:
+                        df = DatabaseConnector.read_csv(uploaded_file)
+                        if df is not None:
+                            st.session_state.csv_df = df
+                            st.success(f"Loaded {uploaded_file.name} ({len(df)} rows)")
+                        else:
+                            st.error("Failed to read CSV file.")
+                            st.session_state.csv_df = None
+                            st.session_state.csv_filename = None # Reset filename on load fail
+                    except Exception as e:
+                        st.error(f"Error loading CSV: {e}")
+                        st.session_state.csv_df = None
+                        st.session_state.csv_filename = None # Reset filename on load fail
+        # else: # File is the same as already loaded, do nothing to preserve state
+        else:
+            # If no file is present in the uploader, clear the state
+            if st.session_state.csv_filename is not None: # Only clear if there *was* a file
+                 st.session_state.csv_filename = None
+                 st.session_state.csv_df = None
+                 st.session_state.attributes_to_profile = [] # Clear list if file removed
+
 
     # --- Results Database Connection ---
     # Load source details from config manager to pass to UI component
@@ -167,9 +181,11 @@ with st.sidebar:
 display_attribute_selection()
 # The component modifies st.session_state.attributes_to_profile directly
 
-# --- Display Selected Attributes & Profiling Execution ---
+# --- Display Selected Attributes ---
 st.header("📋 Attributes Selected for Profiling")
-if st.session_state.attributes_to_profile:
+# Check if the list exists and has items
+attributes_exist = 'attributes_to_profile' in st.session_state and st.session_state.attributes_to_profile
+if attributes_exist:
     with st.expander("View/Edit List", expanded=True):
         attributes_to_remove = []
         for i, attr_id in enumerate(st.session_state.attributes_to_profile):
@@ -182,29 +198,43 @@ if st.session_state.attributes_to_profile:
             st.session_state.attributes_to_profile = [
                 attr for attr in st.session_state.attributes_to_profile if attr not in attributes_to_remove
             ]
-            st.rerun() # Rerun to update the displayed list immediately
-
-    st.header("🚀 Run Profiling")
-    if st.button("Start Profiling Listed Attributes", key="start_profiling_list"):
-        if st.session_state.results_manager:
-            # Call the refactored function from app_logic
-            successful_profiles, error_list = run_profiling_job(
-                st.session_state.attributes_to_profile,
-                st.session_state.results_manager
-            )
-            # Store successful profiles in session state for display
-            st.session_state.profiled_data = successful_profiles
-            # Display errors collected from the job if any
-            if error_list:
-                 with st.expander("View Profiling Errors"):
-                     # Display errors more clearly
-                     for err in error_list:
-                         st.error(f"Error profiling `{err.get('attribute_name', 'Unknown')}`: {err.get('error', 'Unknown error')}")
-
-        else:
-            st.warning("Please connect to the Results Database first to save profiles.")
+            # st.rerun() # Keep commented out
 else:
     st.info("Select attributes from a data source and add them to the list to enable profiling.")
+
+# --- Profiling Execution ---
+st.header("🚀 Run Profiling")
+# Render the button always, but disable if no attributes are selected
+profiling_disabled = not attributes_exist # Disable if list is empty or doesn't exist
+if st.button("Start Profiling Listed Attributes", key="start_profiling_list", disabled=profiling_disabled):
+    # Allow profiling even without results manager, but warn about saving
+    can_save = st.session_state.results_manager is not None
+    if not can_save:
+         st.warning("Results Database not connected. Profiles will be displayed but not saved.")
+try:
+    # Capture the list state *immediately* after entering the button block
+    # Use .copy() to ensure we have an independent list
+    attributes_to_process = st.session_state.get('attributes_to_profile', []).copy()
+ 
+    if not attributes_to_process: # Add extra check here
+            st.warning("Attribute list is empty. Cannot start profiling.")
+    else:
+        successful_profiles, error_list = run_profiling_job(
+            attributes_to_process, # Use the captured list
+            st.session_state.results_manager # Pass manager (can be None)
+        )
+        # Store successful profiles in session state for display
+        st.session_state.profiled_data = successful_profiles
+        # Display errors collected from the job if any
+        if error_list:
+                with st.expander("View Profiling Errors"):
+                    # Display errors more clearly
+                    for err in error_list:
+                        st.error(f"Error profiling `{err.get('attribute_name', 'Unknown')}`: {err.get('error', 'Unknown error')}")
+
+        # st.rerun()
+except Exception as e:
+        st.error(f"An unexpected error occurred in the button click handler: {e}")
 
 
 # --- Display Profiling Results ---
@@ -240,7 +270,7 @@ if st.session_state.results_manager:
 
 # --- Footer or Status Bar ---
 st.divider()
-st.caption("Data Profiler v0.5 - Refactored")
+st.caption("Data Profiler v0.8 - CSV State Fix Attempt 2")
 
 # Note: This version implements multi-attribute selection & refactoring.
 # Further improvements: Error details, async operations, config persistence.

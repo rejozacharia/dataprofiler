@@ -42,7 +42,6 @@ def display_db_connection_form(
 ) -> Optional[Dict[str, Any]]:
     """
     Displays form elements for database connection details.
-    (Code remains the same as before)
     """
     if defaults is None:
         defaults = {}
@@ -85,7 +84,6 @@ def display_results_config_ui(
 ) -> Tuple[Optional[Dict[str, Any]], str]:
     """
     Displays UI for configuring results database connection and table name.
-    (Code remains the same as before)
     """
     st.subheader("2. Results Storage (Database)")
 
@@ -97,18 +95,22 @@ def display_results_config_ui(
     )
 
     results_disabled = use_same_db and source_is_db
-    defaults = source_conn_details if results_disabled else {}
-    # Load saved table name using ConfigManager's method (which uses session state)
-    # Need to instantiate ConfigManager here or pass it in. Let's instantiate for simplicity.
+    # Load saved results connection details if not using source details
     from src.config_manager import ConfigManager # Add import inside function for encapsulation
     config_manager_ui = ConfigManager()
-    saved_table_name = config_manager_ui.load_results_table_name() # Use manager method
+    if results_disabled:
+        defaults = source_conn_details if source_conn_details else {} # Use source if checked and available
+    else:
+        defaults = config_manager_ui.load_connection_details("results") # Load saved results config
+        if defaults is None: # Ensure defaults is always a dict
+            defaults = {}
+
+    saved_table_name = config_manager_ui.load_results_table_name() # Load saved table name regardless
 
     results_table_name = st.text_input(
         "Results Table Name",
         value=saved_table_name, # Use value loaded via ConfigManager
         key="results_table_name_input",
-        # disabled=results_disabled # Keep enabled
     )
 
     conn_details_results = display_db_connection_form(
@@ -128,14 +130,13 @@ def display_results_config_ui(
     return conn_details_to_use, results_table_name
 
 
-# --- NEW: Attribute Selection UI ---
+# --- Attribute Selection UI ---
 def display_attribute_selection():
     """Displays UI for selecting attributes from DB or CSV."""
     st.header("⬇️ Select Attributes for Profiling")
     selected_schema = None
     selected_table = None
     selected_columns_in_table = []
-    # removed_count initialization from here
 
     if st.session_state.source_type == "database" and st.session_state.db_engine:
         try:
@@ -152,18 +153,18 @@ def display_attribute_selection():
                              selected_columns_in_table = st.multiselect("Select Columns", all_columns, key=f"col_select_{selected_schema}_{selected_table}")
 
                              if st.button("Add Columns to List", key=f"add_cols_{selected_schema}_{selected_table}"):
-                                added_count = 0 # Initialize count for DB button click
-                                columns_to_add = all_columns if not selected_columns_in_table else selected_columns_in_table
-                                for col in columns_to_add:
-                                    identifier = format_attribute_identifier(selected_schema, selected_table, col)
-                                    if identifier not in st.session_state.attributes_to_profile:
-                                        st.session_state.attributes_to_profile.append(identifier)
-                                        added_count += 1
-                                if added_count > 0:
-                                    st.success(f"Added {added_count} attribute(s) from '{selected_table}' to the profiling list.")
-                                    # st.rerun() # REMOVED - Let Streamlit handle update on next interaction
-                                elif columns_to_add:
-                                    st.info("Selected attribute(s) already in the list.")
+                                 added_count = 0 # Initialize count for DB button click
+                                 columns_to_add = all_columns if not selected_columns_in_table else selected_columns_in_table
+                                 for col in columns_to_add:
+                                     identifier = format_attribute_identifier(selected_schema, selected_table, col)
+                                     if identifier not in st.session_state.attributes_to_profile:
+                                         st.session_state.attributes_to_profile.append(identifier)
+                                         added_count += 1
+                                 if added_count > 0:
+                                     st.success(f"Added {added_count} attribute(s) from '{selected_table}' to the profiling list.")
+                                     # st.rerun() # Keep commented out
+                                 elif columns_to_add:
+                                     st.info("Selected attribute(s) already in the list.")
                     else:
                         st.info(f"No tables found in schema '{selected_schema}'.")
             else:
@@ -186,10 +187,9 @@ def display_attribute_selection():
                 if identifier not in st.session_state.attributes_to_profile:
                     st.session_state.attributes_to_profile.append(identifier)
                     added_count += 1
-            # Remove debug statements and uncomment rerun
             if added_count > 0:
                 st.success(f"Added {added_count} attribute(s) from '{filename}' to the profiling list.")
-                #st.rerun() # Re-enable rerun
+                # st.rerun() # Keep commented out
             elif columns_to_add:
                 st.info("Selected attribute(s) already in the list.")
             else: # Handle case where columns_to_add might be empty
@@ -198,7 +198,7 @@ def display_attribute_selection():
         st.info("Connect to a database or upload a CSV file to select attributes.")
 
 
-# --- NEW: Profiling Results Display ---
+# --- Profiling Results Display ---
 def display_profiling_results():
     """Displays the results from the last profiling run."""
     st.header("🔍 Profiling Results (Last Run)")
@@ -217,11 +217,10 @@ def display_profiling_results():
         st.info("Run profiling to see results here.")
 
 
-# --- NEW: Clustering Results Display ---
+# --- Clustering Results Display ---
 def display_clustering_results():
     """Displays the results from the last clustering run."""
     st.header("🔗 Clustering Analysis")
-    # Correct indentation for the entire block
     if st.session_state.results_manager:
         # Input for distance threshold remains here
         distance_threshold = st.number_input("Distance Threshold for Clustering", min_value=0.1, value=5.0, step=0.5, key="dist_thresh")

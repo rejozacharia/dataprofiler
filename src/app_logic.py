@@ -22,16 +22,12 @@ def _profile_single_listed_attribute(identifier: str) -> Optional[Dict[str, Any]
     # Ensure necessary state exists before proceeding
     db_engine = st.session_state.get('db_engine')
     csv_df = st.session_state.get('csv_df')
-    if csv_df is not None:
-         print(f"--- DEBUG: _profile_single - csv_df columns: {csv_df.columns.tolist()} ---") # CONSOLE PRINT
-
-
+ 
     if parsed_id["type"] == "db" and db_engine:
         schema = parsed_id["schema"]
         table = parsed_id["table"]
         column = parsed_id["column"]
         if table and column:
-            print(f"--- DEBUG: _profile_single - DB path: Fetching {column} from {schema}.{table} ---") # CONSOLE PRINT
             # Fetch data ONLY for the specific column
             # TODO: Optimize by fetching one sample per table needed.
             df_sample = DatabaseConnector.get_table_sample(
@@ -39,26 +35,19 @@ def _profile_single_listed_attribute(identifier: str) -> Optional[Dict[str, Any]
             )
             if df_sample is not None and column in df_sample.columns:
                 data_series = df_sample[column]
-                print(f"--- DEBUG: _profile_single - DB path: Got data series, length {len(data_series)} ---") # CONSOLE PRINT
             else:
-                print(f"--- DEBUG: _profile_single - DB path: Column '{column}' not found or sample failed ---") # CONSOLE PRINT
                 raise ValueError(f"Column '{column}' not found in sample or sample failed for {schema}.{table}.")
         else:
-             print(f"--- DEBUG: _profile_single - DB path: Invalid table/column in parsed_id ---") # CONSOLE PRINT
              raise ValueError(f"Could not parse DB identifier correctly: {identifier}")
 
     elif parsed_id["type"] == "csv" and csv_df is not None:
         column = parsed_id["column"]
-        print(f"--- DEBUG: _profile_single - CSV path: Looking for column '{column}' ---") # CONSOLE PRINT
         if column and column in csv_df.columns:
             data_series = csv_df[column]
-            print(f"--- DEBUG: _profile_single - CSV path: Got data series, length {len(data_series)} ---") # CONSOLE PRINT
         else:
-            print(f"--- DEBUG: _profile_single - CSV path: Column '{column}' not found ---") # CONSOLE PRINT
             raise ValueError(f"Column '{column}' not found in loaded CSV.")
     else:
         # Raise error if required state (db_engine/csv_df) is missing for the identifier type
-        print(f"--- DEBUG: _profile_single - Cannot profile, checking conditions... Type: {parsed_id['type']}, DB Engine: {db_engine is not None}, CSV DF: {csv_df is not None} ---") # CONSOLE PRINT
         if parsed_id["type"] == "db" and not db_engine:
              raise ConnectionError("Database connection not available.")
         elif parsed_id["type"] == "csv" and csv_df is None:

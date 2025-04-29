@@ -46,8 +46,8 @@ The tool calculates various statistical metrics, identifies data types, detects 
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
-    cd <repository-directory>
+    git clone https://github.com/rejozacharia/dataprofiler
+    cd dataprofiler
     ```
 2.  **Create a virtual environment (recommended):**
     ```bash
